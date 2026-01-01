@@ -1,5 +1,5 @@
-// Load environment variables FIRST
-require("dotenv").config();
+// backend/server.js
+require("dotenv").config(); // still needed for local testing
 
 const express = require("express");
 const cors = require("cors");
@@ -9,83 +9,80 @@ const nodemailer = require("nodemailer");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ---------------- MIDDLEWARE ----------------
+// --- Middleware ---
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ---------------- MONGODB ----------------
+// --- MongoDB Setup ---
 mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => console.log("✅ MongoDB Atlas connected"))
-  .catch((err) => console.error("❌ MongoDB error:", err));
+  .connect(process.env.MONGODB_URI) // this will use Render's environment variable
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// ---------------- SCHEMA ----------------
+// --- Message Schema ---
 const messageSchema = new mongoose.Schema({
-  name: String,
-  email: String,
-  message: String,
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  message: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
 });
 
 const Message = mongoose.model("Message", messageSchema);
 
-// ---------------- ROUTES ----------------
+// --- Routes ---
 
-// Health check
+// Test route
 app.get("/api/test", (req, res) => {
-  res.json({ message: "Backend alive 🚀" });
+  res.json({ message: "Backend is running 🚀" });
 });
 
-// Contact form
+// Contact form route
 app.post("/api/contact", async (req, res) => {
   const { name, email, message } = req.body;
 
   if (!name || !email || !message) {
-    return res.status(400).json({ success: false, msg: "All fields required" });
+    return res
+      .status(400)
+      .json({ success: false, msg: "All fields are required" });
   }
 
   try {
-    // Save to DB
+    // Save to MongoDB
     const newMessage = new Message({ name, email, message });
     await newMessage.save();
+    console.log("📩 Message saved:", name, email);
 
-    // Email setup
+    // Setup Nodemailer
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
+        user: process.env.EMAIL_USER, // Render's env
+        pass: process.env.EMAIL_PASS, // Render's env
+      },
     });
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER,
-      subject: `New portfolio message from ${name}`,
-      text: `
-Name: ${name}
-Email: ${email}
-
-Message:
-${message}
-      `
+      to: process.env.EMAIL_USER, // notifications to yourself
+      subject: `New message from ${name}`,
+      text: `Name: ${name}\nEmail: ${email}\nMessage: ${message}`,
     };
 
-    await transporter.sendMail(mailOptions);
+    transporter.sendMail(mailOptions, (err, info) => {
+      if (err) console.error("❌ Email error:", err);
+      else console.log("✉ Email sent:", info.response);
+    });
 
-    res.json({ success: true, msg: "Message sent successfully 💌" });
-
+    // Respond to frontend
+    res.json({ success: true, msg: "Message received 💌" });
   } catch (err) {
-    console.error("❌ Contact error:", err);
+    console.error("❌ Error handling contact form:", err);
     res.status(500).json({ success: false, msg: "Server error" });
   }
 });
 
-// ---------------- START SERVER ----------------
+// --- Start Server ---
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
