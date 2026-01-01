@@ -33,8 +33,8 @@ const Message = mongoose.model("Message", messageSchema);
 // --- Routes ---
 
 // Test route
-app.get("/api/test", (req, res) => {
-  res.json({ message: "Backend is running 🚀" });
+app.get("/", (req, res) => {
+  res.json({ message: "Backend is running 🚀! Use /api/test to check routes" });
 });
 
 // Contact form route
